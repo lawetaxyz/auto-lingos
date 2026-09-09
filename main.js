@@ -116,7 +116,7 @@
         }
 
         const statusColor = isActive ? '#4ade80' : '#f87171';
-        const statusText = isActive ? 'AKTYWNY (TLE)' : 'WSTRZYMANY';
+        const statusText = isActive ? 'AKTYWNY' : 'WSTRZYMANY';
         const btnColor = isActive ? '#ef4444' : '#22c55e';
         const btnText = isActive ? 'PAUZA' : 'START';
 
