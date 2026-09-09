@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Lingos
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Automatyczny bot do lingos.pl
 // @author       laweta
 // @match        *://*.lingos.pl/*
@@ -16,6 +16,20 @@
     const STORAGE_KEY = 'lingos_db';
     let lastClickTime = 0;
     const CLICK_INTERVAL = 1000;
+    let isActive = true;
+
+    const workerCode = `
+        let timer = null;
+        self.onmessage = function(e) {
+            if (e.data === 'start') {
+                if (!timer) timer = setInterval(() => self.postMessage('tick'), 300);
+            } else if (e.data === 'stop') {
+                if (timer) { clearInterval(timer); timer = null; }
+            }
+        };
+    `;
+    const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+    const bgWorker = new Worker(URL.createObjectURL(workerBlob));
 
     function getDb() {
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -35,7 +49,6 @@
     }
 
     function setInputValue(input, val) {
-        input.focus();
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
         nativeSetter.call(input, val);
 
@@ -51,6 +64,12 @@
     ui.style.cssText = 'position:fixed;bottom:10px;right:10px;z-index:999999;background:#0f172a;color:#f8fafc;padding:12px;border-radius:8px;font-family:monospace;font-size:11px;box-shadow:0 4px 12px rgba(0,0,0,0.5);border:1px solid #334155;max-width:320px;';
     document.body.appendChild(ui);
 
+    ui.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'toggle-bot-btn') {
+            isActive = !isActive;
+        }
+    });
+
     function getQuestion() {
         const qEl = document.querySelector('p.text-2xl strong') || document.querySelector('p.text-2xl');
         return qEl ? qEl.textContent.trim().toLowerCase() : null;
@@ -65,8 +84,8 @@
         const now = Date.now();
         if (now - lastClickTime < CLICK_INTERVAL) return;
 
-        const btn = Array.from(document.querySelectorAll('button')).find(b => 
-            b.textContent.toLowerCase().includes('dalej') || 
+        const btn = Array.from(document.querySelectorAll('button')).find(b =>
+            b.textContent.toLowerCase().includes('dalej') ||
             b.type === 'submit'
         );
 
@@ -82,7 +101,9 @@
         }
     }
 
-    setInterval(() => {
+    bgWorker.onmessage = function (e) {
+        if (e.data !== 'tick') return;
+
         const question = getQuestion();
         const redAnswer = getRedBoxAnswer();
         const input = document.getElementById('learning-answer');
@@ -94,18 +115,32 @@
             savePair(question, redAnswer);
         }
 
+        const statusColor = isActive ? '#4ade80' : '#f87171';
+        const statusText = isActive ? 'AKTYWNY (TLE)' : 'WSTRZYMANY';
+        const btnColor = isActive ? '#ef4444' : '#22c55e';
+        const btnText = isActive ? 'PAUZA' : 'START';
+
         ui.innerHTML = `
-            <div style="color:#38bdf8;font-weight:bold;margin-bottom:4px;">[ AUTO LINGOS by laweta ]</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="color:#38bdf8;font-weight:bold;">[ AUTO LINGOS ]</span>
+                <span style="color:${statusColor};font-weight:bold;font-size:10px;">● ${statusText}</span>
+            </div>
             <div>Pytanie: <b style="color:#facc15;">${question || 'NIE WYKRYTO'}</b></div>
             <div>Czerwona ramka: <b style="color:#f87171;">${redAnswer || 'BRAK'}</b></div>
             <div>Odpowiedź w bazie: <b style="color:#4ade80;">${savedAnswer || 'BRAK WPISU'}</b></div>
-            <div style="margin-top:4px;color:#94a3b8;border-top:1px solid #334155;padding-top:4px;">Baza słówek: ${Object.keys(db).length}</div>
+            <div style="margin-top:6px;padding-top:6px;border-top:1px solid #334155;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#94a3b8;">Baza słówek: ${Object.keys(db).length}</span>
+                <button id="toggle-bot-btn" style="background:${btnColor};color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:10px;">${btnText}</button>
+            </div>
         `;
 
-        if (input && !input.disabled && question && savedAnswer && input.value !== savedAnswer) {
-            setInputValue(input, savedAnswer);
+        if (isActive) {
+            if (input && !input.disabled && question && savedAnswer && input.value !== savedAnswer) {
+                setInputValue(input, savedAnswer);
+            }
+            clickNextButton();
         }
+    };
 
-        clickNextButton();
-    }, 300);
+    bgWorker.postMessage('start');
 })();
