@@ -37,7 +37,7 @@ Skrypt powinien rozpocząć działanie automatycznie.
 ## 📋 Informacje techniczne
 
 **Nazwa:** Auto Lingos  
-**Wersja:** 1.0  
+**Wersja:** 1.1  
 **Autor:** laweta  
 
 **Technologie:**
